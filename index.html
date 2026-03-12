@@ -1,11 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>AI Gesture Particle Universe</title>
 
 <style>
+
 body{
 margin:0;
 overflow:hidden;
@@ -16,7 +19,7 @@ font-family:sans-serif;
 #ui{
 position:absolute;
 top:20px;
-left:20px;
+left:200px;
 color:white;
 text-shadow:1px 1px 3px black;
 }
@@ -28,6 +31,15 @@ left:50%;
 transform:translate(-50%,-50%);
 color:white;
 font-size:24px;
+}
+
+#webcam{
+position:absolute;
+top:10px;
+left:10px;
+width:160px;
+border:2px solid white;
+border-radius:8px;
 }
 
 </style>
@@ -42,17 +54,18 @@ font-size:24px;
 
 <div id="loading">Loading AI Hand Tracking...</div>
 
+<video id="webcam" autoplay playsinline></video>
+
 <div id="ui">
 <h2>Gesture Particle Universe</h2>
 <p>Pinch fingers to scale</p>
 <p>Pinch & release to change shapes</p>
-<p>Move mouse if no camera</p>
 <p>Shape: <span id="shape-name">SPHERE</span></p>
 </div>
 
-<video id="webcam" autoplay playsinline style="display:none"></video>
-
 <script>
+
+/* THREE JS */
 
 const scene = new THREE.Scene();
 
@@ -80,7 +93,7 @@ const geometry = new THREE.BufferGeometry();
 const positions = new Float32Array(particleCount*3);
 const colors = new Float32Array(particleCount*3);
 
-const shapes = {
+const shapes={
 sphere:[],
 heart:[],
 tree:[],
@@ -89,7 +102,7 @@ galaxy:[]
 };
 
 const shapeNames = Object.keys(shapes);
-let currentShapeIndex = 0;
+let currentShapeIndex=0;
 
 
 
@@ -97,8 +110,8 @@ for(let i=0;i<particleCount;i++){
 
 /* SPHERE */
 
-const phi = Math.acos(-1 + (2*i)/particleCount);
-const theta = Math.sqrt(particleCount*Math.PI)*phi;
+const phi=Math.acos(-1+(2*i)/particleCount);
+const theta=Math.sqrt(particleCount*Math.PI)*phi;
 
 shapes.sphere.push(
 30*Math.cos(theta)*Math.sin(phi),
@@ -110,12 +123,12 @@ shapes.sphere.push(
 
 /* HEART */
 
-const t = i*0.1;
-const r = 2;
+const t=i*0.1;
+const r=2;
 
-const x = r*16*Math.pow(Math.sin(t),3);
-const y = r*(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
-const z = (Math.random()-0.5)*10;
+const x=r*16*Math.pow(Math.sin(t),3);
+const y=r*(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t));
+const z=(Math.random()-0.5)*10;
 
 shapes.heart.push(x,y,z);
 
@@ -204,7 +217,7 @@ geometry.setAttribute("color",new THREE.BufferAttribute(colors,3));
 
 
 
-const material = new THREE.PointsMaterial({
+const material=new THREE.PointsMaterial({
 size:1.5,
 vertexColors:true,
 blending:THREE.AdditiveBlending,
@@ -215,31 +228,17 @@ depthWrite:false
 
 
 
-const particles = new THREE.Points(geometry,material);
+const particles=new THREE.Points(geometry,material);
 scene.add(particles);
 
 
 
 /* INTERACTION */
 
-let targetScale = 1;
-let currentScale = 1;
-let baseColor = new THREE.Color(0x00ffff);
-let isPinched = false;
-
-
-
-/* MOUSE CONTROL */
-
-document.addEventListener("mousemove",(e)=>{
-
-const x = e.clientX/window.innerWidth-0.5;
-const y = e.clientY/window.innerHeight-0.5;
-
-particles.rotation.y = x*3;
-particles.rotation.x = y*3;
-
-});
+let targetScale=1;
+let currentScale=1;
+let baseColor=new THREE.Color(0x00ffff);
+let isPinched=false;
 
 
 
@@ -251,7 +250,7 @@ function onResults(results){
 
 document.getElementById("loading").style.display="none";
 
-if(results.multiHandLandmarks){
+if(results.multiHandLandmarks && results.multiHandLandmarks.length>0){
 
 const landmarks=results.multiHandLandmarks[0];
 
@@ -284,8 +283,6 @@ shapeNames[currentShapeIndex].toUpperCase();
 
 
 
-/* EXPLOSION EFFECT */
-
 const pos=geometry.attributes.position;
 
 for(let i=0;i<particleCount;i++){
@@ -304,6 +301,8 @@ pos.array[i*3+2]+= (Math.random()-0.5)*40;
 
 
 
+/* HAND TRACKER */
+
 const hands=new Hands({
 locateFile:(file)=>{
 return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
@@ -321,7 +320,7 @@ hands.onResults(onResults);
 
 
 
-const cam = new Camera(videoElement,{
+const cam=new Camera(videoElement,{
 onFrame:async()=>{
 await hands.send({image:videoElement});
 },
@@ -335,7 +334,7 @@ cam.start();
 
 /* ANIMATION */
 
-const clock = new THREE.Clock();
+const clock=new THREE.Clock();
 
 function animate(){
 
@@ -343,12 +342,12 @@ requestAnimationFrame(animate);
 
 const time=clock.getElapsedTime();
 
-currentScale += (targetScale-currentScale)*0.1;
+currentScale+=(targetScale-currentScale)*0.1;
 
 const pos=geometry.attributes.position;
 const col=geometry.attributes.color;
 
-const targetShape = shapes[shapeNames[currentShapeIndex]];
+const targetShape=shapes[shapeNames[currentShapeIndex]];
 
 for(let i=0;i<particleCount;i++){
 
