@@ -1,497 +1,296 @@
-<!DOCTYPE html>
 <html lang="en">
 <head>
-
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<title>AI Gesture Particle Universe</title>
-
+<title>Barri game</title>
 <style>
+    body {
+        margin: 0;
+        background: gray;
+        overflow: hidden;
+        touch-action: none;
+        user-select: none;
+        font-family: 'Arial', sans-serif;
+    }
 
-body{
-margin:0;
-overflow:hidden;
-background:black;
-font-family:sans-serif;
-}
+    canvas { display: block; }
 
-#webcam{
-position:absolute;
-top:10px;
-left:10px;
-width:160px;
-border:2px solid white;
-border-radius:8px;
-}
+    #menu, #gameover {
+        position: absolute;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        background: rgba(0,0,0,.85);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        text-align: center;
+        padding: 20px;
+        z-index: 10;
+    }
 
-#ui{
-position:absolute;
-top:10px;
-left:190px;
-color:white;
-}
+    button {
+        padding: 15px 40px;
+        font-size: 22px;
+        border: none;
+        border-radius: 12px;
+        background: #ffffff22;
+        color: white;
+        margin-top: 20px;
+        cursor: pointer;
+        transition: 0.2s;
+        box-shadow: 0 0 10px #fff5;
+    }
 
+    button:hover {
+        background: #ffffff33;
+        transform: scale(1.05);
+    }
+
+    #hud {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        color: white;
+        font-size: 22px;
+        z-index: 5;
+        text-shadow: 1px 1px 4px #000;
+    }
+
+    #hearts {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        color: white;
+        font-size: 28px;
+        z-index: 5;
+        text-shadow: 1px 1px 4px #000;
+    }
+
+    #combo {
+        position: absolute;
+        top: 50px;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 30px;
+        color: gold;
+        text-shadow: 2px 2px 6px #000;
+        z-index: 6;
+    }
 </style>
-
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
-
 </head>
-
 <body>
 
-<video id="webcam" autoplay playsinline></video>
+<canvas id="game"></canvas>
 
-<div id="ui">
-<h3>Gesture Particle System</h3>
-<p>Pinch = Zoom</p>
-<p>Move Hand = Rotate / Tilt</p>
-<p>Pinch Release = Change Shape</p>
-<p>Shape: <span id="shape-name">SPHERE</span></p>
+<div id="hud">Score: 0</div>
+<div id="hearts">😎😎😎</div>
+<div id="combo" style="display:none;">Combo!</div>
+
+<div id="menu">
+    <h1>Cut Swipe</h1>
+    <p style="max-width: 300px;">
+        Make the highest score!<br>
+       😅
+    </p>
+    <button onclick="startGame()">Play</button>
+</div>
+
+<div id="gameover" style="display:none;">
+    <h1>GAME OVER</h1>
+    <h2 id="scoreText"></h2>
+    <button onclick="startGame()">Play Again</button>
 </div>
 
 <script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+resizeCanvas();
 
-/* THREE SCENE */
+let objects = [];
+let particles = [];
+let swipeTrail = [];
 
-const scene=new THREE.Scene()
+let score = 0;
+let lives = 3;
+let difficulty = 1;
+let lastSpawn = 0;
+let gameRunning = false;
+let comboCount = 0;
+let lastCutTime = 0;
 
-const camera=new THREE.PerspectiveCamera(
-75,
-window.innerWidth/window.innerHeight,
-0.1,
-1000
-)
+const goodColors = ["cyan", "yellow", "white", "lime", "magenta", "red"];
 
-camera.position.z=120
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.onresize = resizeCanvas;
 
-const renderer=new THREE.WebGLRenderer({antialias:true})
-renderer.setSize(window.innerWidth,window.innerHeight)
-document.body.appendChild(renderer.domElement)
+function startGame() {
+    document.getElementById("menu").style.display = "none";
+    document.getElementById("gameover").style.display = "none";
 
+    objects = [];
+    particles = [];
+    swipeTrail = [];
+    score = 0;
+    lives = 3;
+    difficulty = 1;
+    lastSpawn = 0;
+    comboCount = 0;
+    lastCutTime = 0;
+    gameRunning = true;
 
-
-/* PARTICLES */
-
-const particleCount=5000
-
-const geometry=new THREE.BufferGeometry()
-
-const positions=new Float32Array(particleCount*3)
-const colors=new Float32Array(particleCount*3)
-
-
-
-const shapes={
-sphere:[],
-heart:[],
-saturn:[],
-volcano:[],
-cloud:[],
-mountain:[],
-lightning:[],
-fish:[],
-dog:[],
-star:[],
-pyramid:[],
-skull:[],
-bike:[],
-ship:[],
-ufo:[],
-dna:[]
+    updateHUD();
+    loop();
 }
 
-
-
-const shapeNames=Object.keys(shapes)
-let currentShapeIndex=0
-
-
-
-for(let i=0;i<particleCount;i++){
-
-/* SPHERE */
-
-const phi=Math.acos(-1+(2*i)/particleCount)
-const theta=Math.sqrt(particleCount*Math.PI)*phi
-
-shapes.sphere.push(
-30*Math.cos(theta)*Math.sin(phi),
-30*Math.sin(theta)*Math.sin(phi),
-30*Math.cos(phi)
-)
-
-
-
-/* HEART */
-
-const t=i*0.1
-const r=2
-
-const x=r*16*Math.pow(Math.sin(t),3)
-const y=r*(13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t))
-const z=(Math.random()-0.5)*10
-
-shapes.heart.push(x,y,z)
-
-
-
-/* SATURN */
-
-if(i<particleCount*0.3){
-
-const p=Math.acos(-1+(2*(i/0.3))/particleCount)
-const tt=Math.sqrt(particleCount*0.3*Math.PI)*p
-
-shapes.saturn.push(
-15*Math.cos(tt)*Math.sin(p),
-15*Math.sin(tt)*Math.sin(p),
-15*Math.cos(p)
-)
-
-}else{
-
-const angle=Math.random()*Math.PI*2
-const radius=22+Math.random()*15
-
-shapes.saturn.push(
-radius*Math.cos(angle),
-(Math.random()-0.5)*2,
-radius*Math.sin(angle)
-)
-
+function updateHUD() {
+    document.getElementById("hud").innerText = "Score: " + score;
+    document.getElementById("hearts").innerText = "❤️".repeat(lives);
 }
 
+function spawnObject() {
+    const size = 70;
+    const x = Math.random() * (canvas.width - size);
+    const y = canvas.height + size;
 
+    const color = goodColors[Math.floor(Math.random() * goodColors.length)];
 
-/* VOLCANO */
-
-shapes.volcano.push(
-(Math.random()-0.5)*20,
-Math.random()*30-15,
-(Math.random()-0.5)*20
-)
-
-
-
-/* CLOUD */
-
-shapes.cloud.push(
-(Math.random()-0.5)*40,
-(Math.random()-0.5)*10,
-(Math.random()-0.5)*20
-)
-
-
-
-/* MOUNTAIN */
-
-shapes.mountain.push(
-(Math.random()-0.5)*30,
-Math.abs(Math.random()*30),
-(Math.random()-0.5)*30
-)
-
-
-
-/* LIGHTNING */
-
-shapes.lightning.push(
-(Math.random()-0.5)*5,
-30-i*0.01,
-(Math.random()-0.5)*5
-)
-
-
-
-/* FISH */
-
-const angle=Math.random()*Math.PI*2
-
-shapes.fish.push(
-Math.cos(angle)*20,
-Math.sin(angle)*8,
-(Math.random()-0.5)*10
-)
-
-
-
-/* DOG */
-
-shapes.dog.push(
-(Math.random()-0.5)*25,
-(Math.random()-0.5)*15,
-(Math.random()-0.5)*10
-)
-
-
-
-/* STAR */
-
-const starAngle=Math.random()*Math.PI*2
-const starRadius=20*(Math.random()<0.5?1:0.4)
-
-shapes.star.push(
-Math.cos(starAngle)*starRadius,
-Math.sin(starAngle)*starRadius,
-(Math.random()-0.5)*5
-)
-
-
-
-/* PYRAMID */
-
-shapes.pyramid.push(
-(Math.random()-0.5)*30,
-Math.random()*30,
-(Math.random()-0.5)*30
-)
-
-
-
-/* SKULL */
-
-shapes.skull.push(
-(Math.random()-0.5)*20,
-Math.random()*25-5,
-(Math.random()-0.5)*20
-)
-
-
-
-/* BIKE */
-
-shapes.bike.push(
-(Math.random()-0.5)*35,
-(Math.random()-0.5)*10,
-(Math.random()-0.5)*5
-)
-
-
-
-/* SHIP */
-
-shapes.ship.push(
-(Math.random()-0.5)*40,
-(Math.random()-0.5)*5,
-(Math.random()-0.5)*15
-)
-
-
-
-/* UFO */
-
-const a=Math.random()*Math.PI*2
-const rad=20
-
-shapes.ufo.push(
-Math.cos(a)*rad,
-(Math.random()-0.5)*3,
-Math.sin(a)*rad
-)
-
-
-
-/* DNA HELIX */
-
-const dnaT=i*0.05
-
-shapes.dna.push(
-Math.cos(dnaT)*20,
-i*0.02-30,
-Math.sin(dnaT)*20
-)
-
-
-
-positions[i*3]=shapes.sphere[i*3]
-positions[i*3+1]=shapes.sphere[i*3+1]
-positions[i*3+2]=shapes.sphere[i*3+2]
-
-colors[i*3]=1
-colors[i*3+1]=1
-colors[i*3+2]=1
-
+    objects.push({
+        x, y,
+        size,
+        color,
+        speed: 2 + difficulty
+    });
 }
 
-
-
-geometry.setAttribute("position",new THREE.BufferAttribute(positions,3))
-geometry.setAttribute("color",new THREE.BufferAttribute(colors,3))
-
-
-
-const material=new THREE.PointsMaterial({
-size:1.5,
-vertexColors:true,
-blending:THREE.AdditiveBlending,
-transparent:true,
-opacity:0.9,
-depthWrite:false
-})
-
-
-
-const particles=new THREE.Points(geometry,material)
-scene.add(particles)
-
-
-
-/* INTERACTION */
-
-let targetScale=1
-let currentScale=1
-let baseColor=new THREE.Color(0x00ffff)
-let isPinched=false
-
-
-
-/* HAND TRACKING */
-
-const videoElement=document.getElementById("webcam")
-
-function onResults(results){
-
-if(results.multiHandLandmarks && results.multiHandLandmarks.length>0){
-
-const landmarks=results.multiHandLandmarks[0]
-
-const thumb=landmarks[4]
-const index=landmarks[8]
-
-const dx=thumb.x-index.x
-const dy=thumb.y-index.y
-
-const distance=Math.sqrt(dx*dx+dy*dy)
-
-targetScale=Math.max(0.2,Math.min(distance*10,3))
-
-baseColor.setHSL(distance*3,1,0.6)
-
-
-
-/* ROTATION + TILT */
-
-const handX=landmarks[9].x
-const handY=landmarks[9].y
-
-particles.rotation.y=(handX-0.5)*4
-particles.rotation.x=(handY-0.5)*4
-
-
-
-if(distance<0.04 && !isPinched){
-
-isPinched=true
-
-}else if(distance>0.06 && isPinched){
-
-isPinched=false
-
-currentShapeIndex=(currentShapeIndex+1)%shapeNames.length
-
-document.getElementById("shape-name").innerText=
-shapeNames[currentShapeIndex].toUpperCase()
-
+function createParticles(x, y, color) {
+    for (let i = 0; i < 20; i++) {
+        particles.push({
+            x, y,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
+            size: 4 + Math.random() * 4,
+            color,
+            life: 25 + Math.random() * 15
+        });
+    }
 }
 
+canvas.addEventListener("touchmove", e => {
+    const touch = e.touches[0];
+    swipeTrail.push({ x: touch.clientX, y: touch.clientY, life: 10 });
+    checkCut(touch.clientX, touch.clientY);
+});
+
+canvas.addEventListener("touchstart", e => {
+    const t = e.touches[0];
+    swipeTrail.push({ x: t.clientX, y: t.clientY, life: 10 });
+});
+
+function checkCut(x, y) {
+    let cutThisFrame = false;
+
+    objects.forEach((obj, i) => {
+        if (
+            x > obj.x &&
+            x < obj.x + obj.size &&
+            y > obj.y &&
+            y < obj.y + obj.size
+        ) {
+            createParticles(obj.x + obj.size/2, obj.y + obj.size/2, obj.color);
+
+            score++;
+            difficulty += 0.05;
+            cutThisFrame = true;
+
+            objects.splice(i, 1);
+        }
+    });
+
+    const now = performance.now();
+    if (cutThisFrame && now - lastCutTime < 400) {
+        comboCount++;
+        if (comboCount >= 2) {
+            document.getElementById("combo").style.display = "block";
+            setTimeout(() => document.getElementById("combo").style.display = "none", 300);
+        }
+    } else {
+        comboCount = 0;
+    }
+    lastCutTime = now;
+
+    updateHUD();
 }
 
+function loop(timestamp) {
+    if (!gameRunning) return;
+
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+
+    // spawn objects
+    if (!lastSpawn || timestamp - lastSpawn > Math.max(300, 700 - difficulty * 40)) {
+        spawnObject();
+        lastSpawn = timestamp;
+    }
+
+    // move and draw objects
+    for (let i = 0; i < objects.length; i++) {
+        const obj = objects[i];
+        obj.y -= obj.speed;
+
+        if (obj.y + obj.size < 0) {
+            lives--;
+            updateHUD();
+            objects.splice(i, 1);
+
+            if (lives <= 0) {
+                endGame();
+                return;
+            }
+
+            i--;
+            continue;
+        }
+
+        ctx.fillStyle = obj.color;
+        ctx.beginPath();
+        ctx.arc(obj.x + obj.size/2, obj.y + obj.size/2, obj.size/2, 0, Math.PI*2);
+        ctx.fill();
+    }
+
+    // draw swipe trail
+    swipeTrail.forEach((p, i) => {
+        ctx.fillStyle = "rgba(255,255,255," + p.life / 10 + ")";
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 25 * (p.life / 10), 0, Math.PI * 2);
+        ctx.fill();
+
+        p.life -= 0.5;
+        if (p.life <= 0) swipeTrail.splice(i, 1);
+    });
+
+    // draw particles
+    particles.forEach((p, i) => {
+        ctx.fillStyle = p.color;
+        ctx.fillRect(p.x, p.y, p.size, p.size);
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life--;
+        if (p.life <= 0) particles.splice(i, 1);
+    });
+
+    requestAnimationFrame(loop);
 }
 
-
-
-const hands=new Hands({
-locateFile:(file)=>{
-return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+function endGame() {
+    gameRunning = false;
+    document.getElementById("gameover").style.display = "flex";
+    document.getElementById("scoreText").innerText = "Final Score: " + score;
 }
-})
-
-hands.setOptions({
-maxNumHands:1,
-modelComplexity:1,
-minDetectionConfidence:0.6,
-minTrackingConfidence:0.6
-})
-
-hands.onResults(onResults)
-
-
-
-const cam=new Camera(videoElement,{
-onFrame:async()=>{
-await hands.send({image:videoElement})
-},
-width:640,
-height:480
-})
-
-cam.start()
-
-
-
-/* ANIMATION */
-
-const clock=new THREE.Clock()
-
-function animate(){
-
-requestAnimationFrame(animate)
-
-const time=clock.getElapsedTime()
-
-currentScale+=(targetScale-currentScale)*0.1
-
-const pos=geometry.attributes.position
-const col=geometry.attributes.color
-
-const targetShape=shapes[shapeNames[currentShapeIndex]]
-
-for(let i=0;i<particleCount;i++){
-
-const tx=targetShape[i*3]*currentScale
-const ty=targetShape[i*3+1]*currentScale
-const tz=targetShape[i*3+2]*currentScale
-
-pos.array[i*3]+= (tx-pos.array[i*3])*0.05
-pos.array[i*3+1]+= (ty-pos.array[i*3+1])*0.05
-pos.array[i*3+2]+= (tz-pos.array[i*3+2])*0.05
-
-pos.array[i*3]+=Math.sin(time+i)*0.05
-pos.array[i*3+1]+=Math.cos(time+i)*0.05
-
-
-
-const c=new THREE.Color().copy(baseColor).offsetHSL(i/particleCount*0.2,0,0)
-
-col.array[i*3]=c.r
-col.array[i*3+1]=c.g
-col.array[i*3+2]=c.b
-
-}
-
-pos.needsUpdate=true
-col.needsUpdate=true
-
-renderer.render(scene,camera)
-
-}
-
-animate()
-
-
-
-window.addEventListener("resize",()=>{
-
-camera.aspect=window.innerWidth/window.innerHeight
-camera.updateProjectionMatrix()
-renderer.setSize(window.innerWidth,window.innerHeight)
-
-})
-
 </script>
-
 </body>
 </html>
